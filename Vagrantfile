@@ -28,8 +28,8 @@ $instance_name_prefix = "core"
 $enable_serial_logging = false
 $share_home = false
 $vm_gui = false
-$vm_memory = 1024
-$vm_cpus = 1
+$vm_memory = 1536
+$vm_cpus = 2
 $vb_cpuexecutioncap = 100
 $shared_folders = {}
 $forwarded_ports = {}
@@ -66,11 +66,8 @@ Vagrant.configure("2") do |config|
   config.vm.box = "coreos-alpha"
   config.vm.box_url = "https://alpha.release.core-os.net/amd64-usr/current/coreos_production_vagrant_virtualbox.json"
 
-  ["vmware_fusion", "vmware_workstation"].each do |vmware|
-    config.vm.provider vmware do |v, override|
-      override.vm.box_url = "https://alpha.release.core-os.net/amd64-usr/current/coreos_production_vagrant_vmware_fusion.json"
-    end
-  end
+  # customize disk size
+  config.disksize.size = "100GB"
 
   config.vm.provider :virtualbox do |v|
     # On VirtualBox, we don't have guest additions or a functional vboxsf
@@ -97,15 +94,6 @@ Vagrant.configure("2") do |config|
         serialFile = File.join(logdir, "%s-serial.txt" % vm_name)
         FileUtils.touch(serialFile)
 
-        ["vmware_fusion", "vmware_workstation"].each do |vmware|
-          config.vm.provider vmware do |v, override|
-            v.vmx["serial0.present"] = "TRUE"
-            v.vmx["serial0.fileType"] = "file"
-            v.vmx["serial0.fileName"] = serialFile
-            v.vmx["serial0.tryNoRxLoss"] = "FALSE"
-          end
-        end
-
         config.vm.provider :virtualbox do |vb, override|
           vb.customize ["modifyvm", :id, "--uart1", "0x3F8", "4"]
           vb.customize ["modifyvm", :id, "--uartmode1", serialFile]
@@ -118,14 +106,6 @@ Vagrant.configure("2") do |config|
 
       $forwarded_ports.each do |guest, host|
         config.vm.network "forwarded_port", guest: guest, host: host, auto_correct: true
-      end
-
-      ["vmware_fusion", "vmware_workstation"].each do |vmware|
-        config.vm.provider vmware do |v|
-          v.gui = vm_gui
-          v.vmx['memsize'] = vm_memory
-          v.vmx['numvcpus'] = vm_cpus
-        end
       end
 
       config.vm.provider :virtualbox do |vb|
@@ -143,12 +123,14 @@ Vagrant.configure("2") do |config|
 
       # Uncomment below to enable NFS for sharing the host machine into the coreos-vagrant VM.
       #config.vm.synced_folder ".", "/home/core/share", id: "core", :nfs => true, :mount_options => ['nolock,vers=3,udp']
+      config.vm.synced_folder ".", "/home/core/share", id: "core", type: "rsync"
+      config.vm.synced_folder "D:\\\\dev", "/home/core/dev", id: "core", type: "rsync"
       $shared_folders.each_with_index do |(host_folder, guest_folder), index|
-        config.vm.synced_folder host_folder.to_s, guest_folder.to_s, id: "core-share%02d" % index, nfs: true, mount_options: ['nolock,vers=3,udp']
+        config.vm.synced_folder host_folder.to_s, guest_folder.to_s, id: "core-share%02d" % index, type: "rsync"
       end
 
       if $share_home
-        config.vm.synced_folder ENV['HOME'], ENV['HOME'], id: "home", :nfs => true, :mount_options => ['nolock,vers=3,udp']
+        config.vm.synced_folder ENV['HOME'], ENV['HOME'], id: "home", type: "rsync"
       end
 
       # This shouldn't be used for the virtualbox provider (it doesn't have any effect if it is though)
